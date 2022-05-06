@@ -7,7 +7,6 @@ import com.example.model.ParkingSpot;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.NoSuchElementException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -22,42 +21,38 @@ public class ParkingLotManager {
     }
 
     public void parkCar(Car car) {
-        System.out.println(LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-                + " Car #" + car.getId() + " (parkingDuration = " + car.getParkingDuration()
-                + ", maxWaitTime = " + car.getMaxWaitTime()
-                + ") started searching for an empty parking spot");
+        System.out.printf("%s Car #%d (parkingDuration = %d, maxWaitTime = %d) started searching for an empty parking spot\n",
+                now(), car.getId(), car.getParkingDuration(), car.getMaxWaitTime());
         try {
             if (semaphore.tryAcquire(car.getMaxWaitTime(), car.getTimeUnit())) {
-                ParkingSpot parkingSpot = null;
+                ParkingSpot parkingSpot;
                 try {
                     lock.lock();
                     parkingSpot = parkingLot.getParkingSpots().stream()
                             .filter(o -> !o.isBusy())
                             .findFirst()
-                            .get();
+                            .orElseThrow(() -> new ParkingLotException("Unable to find an empty spot"));
                     parkingSpot.setBusy(true);
-                } catch (NoSuchElementException e) {
-                    throw new ParkingLotException("Unable to find an empty spot", e);
-                }
-                finally {
+                } finally {
                     lock.unlock();
                 }
-                System.out.println(LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-                        + " Car #" + car.getId() + " started parking");
+                System.out.printf("%s Spot #%d: Car #%d started parking\n", now(), parkingSpot.getId(), car.getId());
                 try {
                     car.getTimeUnit().sleep(car.getParkingDuration());
                 } finally {
                     parkingSpot.setBusy(false);
                     semaphore.release();
                 }
-                System.out.println(LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-                        + " Car #" + car.getId() + " finished parking");
+                System.out.printf("%s Spot #%d: Car #%d finished parking\n", now(), parkingSpot.getId(), car.getId());
             } else {
-                System.out.println(LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-                        + " Car #" + car.getId() + " stopped searching due to timeout");
+                System.out.printf("%s Car #%d stopped searching due to timeout", now(), car.getId());
             }
         } catch (InterruptedException e) {
             throw new ParkingLotException("Car #" + car.getId() + " interrupted parking", e);
         }
+    }
+
+    private String now() {
+        return LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
     }
 }
