@@ -7,6 +7,7 @@ import com.example.model.ParkingSpot;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.NoSuchElementException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -27,13 +28,20 @@ public class ParkingLotManager {
                 + ") started searching for an empty parking spot");
         try {
             if (semaphore.tryAcquire(car.getMaxWaitTime(), car.getTimeUnit())) {
-                lock.lock();
-                ParkingSpot parkingSpot = parkingLot.getParkingSpots().stream()
-                        .filter(o -> !o.isBusy())
-                        .findFirst()
-                        .get();
-                parkingSpot.setBusy(true);
-                lock.unlock();
+                ParkingSpot parkingSpot = null;
+                try {
+                    lock.lock();
+                    parkingSpot = parkingLot.getParkingSpots().stream()
+                            .filter(o -> !o.isBusy())
+                            .findFirst()
+                            .get();
+                    parkingSpot.setBusy(true);
+                } catch (NoSuchElementException e) {
+                    throw new ParkingLotException("Unable to find an empty spot", e);
+                }
+                finally {
+                    lock.unlock();
+                }
                 System.out.println(LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
                         + " Car #" + car.getId() + " started parking");
                 try {
